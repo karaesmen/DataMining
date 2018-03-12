@@ -1,0 +1,316 @@
+---
+title: "Statistical Data Mining II - Homework 3"
+author: "Ezgi Karaesmen"
+date: "April 8, 2016"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+library(knitr)
+library(kfigr)
+library(igraph)
+library(RBGL)
+library(ggm)
+library(gRbase)
+library(gRain)
+library(Rgraphviz)
+```
+
+# Exercise 1: Working with `igraph`
+
+Two publicly available networks `miserables` and `dolphins` were downloaded from the Nexus network repository, and uploaded in the R environment via `nexus.get()` function from the library `igraph`. `Dolphins` network is an undirected social network of frequent associations between 62 dolphins. On the other hand, `miserables` is the co-occurrence network of the Les Miserables musical's cast, where two characters are connected if they appear in the same scene. 
+
+In order to better understand the `igraph` functions, `igraph_demo("hrg")` tutorial was followed. `HRG` stands for hierarchical random graph, where according to the expected community structure of the network and node probabilities, a deprogram structure is constructed. 
+
+## (a) Find a consensus dendrogram that is based on MCMC-based sampling, and produce a plot that reveals communities.
+
+This task was not completed fully, and consensus deprogram was not generated due to technical problems. However, optimal community structure of the graph was calculated via `cluster_optimal()` function. Calculated memberships were assigned to each vertex, and the graph was visualized with computed communities. Then a HRG was fitted to each network, based on MCMC-based sampling, and was visualized as a deprogram.
+
+Figures 1 and 2 were produced from the `dolphins` network, and upon comparison it can be seen that vertices that are grouped in the same community in figure 1 are also clustered closely on the deprogram. Similarly, figures 3 and 4 were produced from the `miserables` network, and show the same pattern. Dendrograms simplify the networks, and are very useful for crowded networks.   
+
+```{r, echo=F, out.width = '\\maxwidth' , fig.width=10 ,fig.height=10 , fig.align='center', fig.cap="Undirectional dolpins network, with calculated communities. Color areas around vertices indicate communities.", fig.show='hold'}
+load("./HW3_env.RData")
+plot(optcom.d, dolphins)
+```
+
+```{r, echo=F,out.width = '\\maxwidth' , fig.width=10 ,fig.height=12 , fig.align='center', fig.cap="Dendrogram of the dolphins network upon HRG fitting", fig.show='hold'}
+dendPlot(hrg.dol, edge.color="black", cex=0.8)
+```
+
+```{r, echo=F, out.width = '\\maxwidth' , fig.width=10 ,fig.height=10 , fig.align='center', fig.cap="Undirectional miserables network, with calculated communities. Color areas around vertices indicate communities.", fig.show='hold'}
+plot(optcom.m, miserables)
+```
+
+```{r, echo=F,out.width = '\\maxwidth' , fig.width=10 ,fig.height=12 , fig.align='center', fig.cap="Dendrogram of the miserables network upon HRG fitting", fig.show='hold'}
+dendPlot(hrg.mis, edge.color="black", cex=0.8)
+```
+
+## (b-c)  Create noisy datasets from the original `dolphins` data set by deleting 5%, 15% and 40% of the edges randomly. Perform MCMC on this data followed by link-prediction. Are you able to predict the edges that you deleted at random well?
+
+Datasets with random missing edges were produced as described, and `predict_edges()` function was applied to predict missing edges. Prediction is achieved by MCMC-sampling hierarchical models around the optimum model, proportionally to their likelihood (R-help file). Function returns the predicted edge indices in two column vectors of vertex ids, indicating that the node is predicted to be missing from $vertex_{i}$ (column 1) to $vertex_{j}$ (column 2). It also returns probabilities for each node.
+
+To avoid repetition, a function accepting `igraph` objects and percent of the edges to be randomly deleted as input was generated, and applied to `dolphins` network for 5%, 15% and 40% edge deletion rates. Function outputs the number of deleted, correctly predicted and total number of predicted edges, as well as the percent of the actually deleted edges with prediction probabilities higher than the 3rd quartile of all predicted edge probability. The number of deleted edges with probabilities above this $Q_{3}$ threshold was preferred as a quantification of how well the edges are predicted. Evaluation of the prediction wellness is not straightforward, as for every deletion rate, all deleted edges were predicted correctly by the prediction function. However, function predicts all possible edges that were not included in the `igraph` object in an exhaustive manner, produces a vast amount of predicted edges and therefore a mere comparison of number of correct predictions cannot be an indicator of the performance. Similarly, it is not clear which predicted edges should actually be added in the graph, as one has to chose from approximately 1700 or more predicted edges. Therefore, a comparison over the probabilities were preferred, yet when probabilities were sorted in an descending order, the deleted edges seldom appeared in the top of the list with other predicted edges with high probabilities. Consequently, upper quartile of the all predicted probabilities was selected as a threshold and performance of prediction for different deletion rates were compared according to this parameter.   
+
+```{r, eval=F}
+del5 <- edge.pred(dolphins, 5)  
+```
+
+```{r, echo=F}
+load("./mymes.RData")
+mymes(del5)
+```
+
+```{r, eval=F}
+del15 <- edge.pred(dolphins, 15)  
+```
+
+```{r, echo=F}
+load("./mymes.RData")
+mymes(del15)
+```
+
+```{r, eval=F}
+del40 <- edge.pred(dolphins, 40)
+```
+
+```{r, echo=F}
+load("./mymes.RData")
+mymes(del40)
+```
+
+Even with the preferred threshold method it is hard to conclude about the prediction performance for different deletion rates, as the percent of the deleted edges that pass the threshold seems to increase with higher deletion rates. On the other hand, probabilities for edges seem to be decreasing for higher deletion rates.
+
+# Exercise 2: Constructing minimal I-map for the marginal distribution
+
+The original Bayesian Network was adopted from a famous network by Judea Pearl and denoted as `B`. Network B was provided visually and therefore was reconstructed in R using the approach shown in computer lab lecture `BN_demo`, by using `dagList()` and was visualized (Figure 5). Then a Bayesian Network `B'` was constructed over all of the nodes EXCEPT for Alarm that is the minimal I-map for the marginal distribution $P_B (B,E,T,N,J,M)$ with inclusion of all dependencies that remain from the original graph. This was achieved with `inducedDAG()` function from `ggm` package, where the adjacency matrix of B was produced, and was used as input along with a character vector specifying the aimed marginal distribution to produce the minimal I-map graph. 
+
+\vspace{2 cm}
+
+```{r, echo=F, out.width = '\\maxwidth',fig.width=2.5 ,fig.height=2.5 , fig.cap="Original bayesian network (on the right) and minimal i-map for the marginal distribution $P_B (B,E,T,N,J,M)$ (on the left)", fig.align='center',fig.show='hold', fig.pos = "h"}
+## Constructing original Bayesian Network B ###
+
+# writing format: ~parent (w/o parent) ~child|parent, 
+#for childs with 2 parents: ~child|parent1:parent2
+
+B <- list(~burglary, ~alarm|burglary:earthquake, ~earthquake, 
+          ~tv, ~john_call|tv:alarm, ~nap, ~mary_call|nap:alarm)
+B <- dagList(B)
+
+# produce adjacency matrix
+Badj <- as(B,"matrix")
+
+# generate minimal i-map, or the marginal distribution P (B,E,T,N,J,M) 
+B.pr <- inducedDAG(Badj, order=c("burglary", "earthquake", "tv", "nap", "john_call", "mary_call"))
+B.pr.gr <- as(B.pr,"graphNEL")
+
+# dev.off()
+# plot.new()
+# par(mfrow=c(2,1))
+plot(B)
+plot(B.pr.gr)
+
+```
+\newpage
+
+# Exercise 3: Determine if the following statements are “TRUE OR FALSE” based on the DAG.
+
+```{r, echo=F, out.width = '\\maxwidth',fig.width=3 ,fig.height=3 , fig.cap="Original DAG network", fig.align='center',fig.show='hold', fig.pos = "h"}
+g <- list(~A,~B, ~C|A, ~D|A:B, ~E|B, ~F_|C:E, ~G|D:E, ~H|F_:G)
+g.dag <- dagList(g)
+plot(g.dag)
+```
+
+* A) C and G are d-separated.
+
+```{r}
+dSep(as(g.dag, "matrix"), "C", "G", NULL)
+```
+
+* B) C and E are d-separated.
+
+```{r}
+dSep(as(g.dag, "matrix"), "C", "E", NULL)
+```
+
+* C) C and E are d-connected given evidence about G.
+
+```{r}
+dSep(as(g.dag, "matrix"), "C", "E", "G") == FALSE
+```
+
+* D) A and G are d-connected given evidence about D and E.
+
+```{r}
+dSep(as(g.dag, "matrix"), "A", "G", c("D","E")) == FALSE
+```
+
+* E) A and G are d-connected given evidence on D.
+
+```{r}
+dSep(as(g.dag, "matrix"), "A", "G", "D") == FALSE
+```
+
+
+\vspace{1cm}
+
+# Appendix
+
+R codes that were not presented in the text.
+
+## Exercise 1 (a)
+```{r, eval=FALSE}
+ library(igraph)
+set.seed(1)
+
+# Undirected social network of frequent associations between 62 dolphins 
+#in a community living off Doubtful Sound, New Zealand.
+dolphins <- nexus.get("dolphins")
+
+# Two characters are connected if they appear in the same scene. 
+# The weight of the connection is the number of common appearances.
+miserables <- nexus.get("miserables")
+
+?igraphdemo
+
+igraph_demo("hrg")
+
+### Optimalize modularity
+
+# cluster_optimal: This function calculates the optimal community structure of a graph, 
+# by maximizing the modularity measure over all possible partitions.
+optcom.d <- cluster_optimal(dolphins)
+optcom.m <- cluster_optimal(miserables)
+
+# membership: Numeric vector, one value for each vertex, 
+# assigns which cluster the vertex belongs to
+V(dolphins)$comm <- membership(optcom.d)
+V(miserables)$comm <- membership(optcom.m)
+
+## Plot the undirectional network with communities
+plot(optcom.d, dolphins)
+plot(optcom.m, miserables)
+
+## Fit HRG
+hrg.dol <- fit_hrg(dolphins)
+hrg.mis <- fit_hrg(miserables)
+
+### Plot HRG as a dendrogram
+dendPlot(hrg.dol, edge.color="black", cex=0.5)
+dendPlot(hrg.mis, edge.color="black", cex=0.5)
+```
+
+
+## Exercise 1 (b-c)
+```{r, eval=FALSE}
+
+set.seed(1)
+
+### One function was written to be used for all different deletions
+
+edge.pred <- function ( ig_obj, pct) {
+  #ig_obj = igraph class R obj, pct=percent
+  
+
+  #number of edges will be deleted
+  num.del <- round(ecount(ig_obj)*(pct/100))
+  
+  #pick random edges to delete
+  delete<-sample(1:ecount(ig_obj),num.del)
+  
+  #delete the randomly picked edges
+  igraph.del<-delete.edges(ig_obj, delete)
+  
+  #predict the missing edges
+  #actual edges in the graph aren't repredicted
+  pred<-predict_edges(igraph.del)
+  
+  #indices of predicted edges
+  pred.edge <-pred$edges
+  
+  #indices of deleted edges
+  del.edge<-get.edges(ig_obj, delete)
+  
+  #match deleted indices with predicted indices
+  temp = NULL
+  foo <- function(x){ 
+    for(i in 1:nrow(del.edge)){ temp[i] <- all(x == del.edge[i,])}
+    any(temp)}
+  
+  cor.pred <-apply(pred.edge, 1, foo)
+  # pred.edge[which(cor.pred),]
+  num.del <- nrow(del.edge)
+  n.cor.pred <- sum(1*cor.pred)
+  tot.pred <- nrow(pred.edge)
+  
+  #probabilities of predicted edges
+  d.prob <-pred$prob[which(cor.pred)]
+  p.prob <- pred$prob
+  num.del.75Q <- sum(1*(d.prob>quantile(p.prob)[4])) 
+  
+  cat(
+  " Number of deleted edges : ", x$num.del, "\n",
+  "Number of correctly predicted edges : ", x$n.cor.pred, "\n",
+  "Total number predicted edges : ", x$tot.pred, "\n",
+  "% of deleted edges that pass 3rd Q threshold : ", 100*x$num.del.75Q/x$num.del, "%\n",
+  "Summary of predicted probabilities - all predicted edges : \n",
+  "-- Min :", round(summary(x$p.prob)[[1]],4), "\n",
+  "-- 1st Q :", round(summary(x$p.prob)[[2]],4), "\n",
+  "-- Median :", round(summary(x$p.prob)[[3]],4), "\n",
+  "-- Mean :", round(summary(x$p.prob)[[4]],4), "\n",
+  "-- 3rd Q :", round(summary(x$p.prob)[[5]],4), "\n",
+  "-- Max :", round(summary(x$p.prob)[[6]],4), "\n",
+  "Summary predicted probabilities - deleted edges : \n",
+  "-- Min :", round(summary(x$d.prob)[[1]],4), "\n",
+  "-- 1st Q :", round(summary(x$d.prob)[[2]],4), "\n",
+  "-- Median :", round(summary(x$d.prob)[[3]],4), "\n",
+  "-- Mean :", round(summary(x$d.prob)[[4]],4), "\n",
+  "-- 3rd Q :", round(summary(x$d.prob)[[5]],4), "\n",
+  "-- Max :", round(summary(x$d.prob)[[6]],4))
+ 
+  list(num.del=num.del,
+       delete=delete,
+       igraph.del=igraph.del,
+       pred=pred,
+       pred.edge=pred.edge,
+       del.edge=del.edge,
+       cor.pred=cor.pred,
+       n.cor.pred=n.cor.pred,
+       tot.pred=tot.pred,
+       d.prob=d.prob,
+       p.prob=p.prob,
+       num.del.75Q=num.del.75Q
+  )
+  
+}
+
+del5 <- edge.pred(dolphins, 5)  
+del15 <- edge.pred(dolphins, 15) 
+del40 <- edge.pred(dolphins, 40)
+
+```
+
+## Exercise 2
+
+```{r, eval=F}
+
+library(ggm)
+## Contructing original Bayesian Network B ###
+
+# writing format: ~parent (w/o parent) ~child|parent, 
+#for childs with 2 parents: ~child|parent1:parent2
+
+B <- list(~burglary, ~alarm|burglary:earthquake, ~earthquake, 
+          ~tv, ~john|tv:alarm, ~nap, ~mary|nap:alarm)
+B <- dagList(B)
+
+# produce adjacency matrix
+Badj <- as(B,"matrix")
+
+# generate minimal i-map, of the marginal distribution P (B,E,T,N,J,M) 
+B.pr <- inducedDAG(Badj, order=c("burglary", "earthquake", "tv", "nap", "john", "mary"))
+B.pr.gr <- as(B.pr,"graphNEL")
+
+# plot graphs
+plot(B)
+plot(B.pr.gr)
+```

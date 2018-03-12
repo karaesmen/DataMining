@@ -1,0 +1,635 @@
+---
+title: "Statistical Data Mining II - Homework 2"
+author: "Ezgi Karaesmen"
+date: "March 10, 2016"
+output: pdf_document
+geometry: margin = 2cm
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=TRUE)
+library(knitr)
+library(kfigr)
+library("multtest")
+library("fpc")
+library("cluster")
+load("./DMII_HW2_env.RData")
+```
+
+# Exercise 1: Carrying out a Principal Component Analysis (PCA) of Swiss bank note measurements
+
+PCA is an exploratory data analysis method that helps us to summarize the variability and correspondence between the variables of the high dimensional data. This is achieved by reducing the dimensionality to a smaller number of representative variables, called principal components, that collectively capture and present most of the variability in the original data set. PCA is a very useful tool, as examining the data by visualizing two-dimensional scatterplots of all possible pairs of variables can be very time consuming and hard to interpret, and PCA overcomes this problem.
+
+The data set used in this exercise consists of six variables and 200 observations, where first 100 observations were obtained from genuine bank notes and second 100 observations were obtained from counterfeit bank notes. Before applying PCA to the example data set, it would be helpful to look at the scale and variance of the variables, since the data set is not very high dimensional and can be helpful in deciding whether the data set should be scaled prior to PCA. 
+
+```{r, out.width = '\\maxwidth' , fig.width=8 ,fig.height=2.1 , fig.align='center', fig.cap="Box plots of each variable in the data set, visualized for genuine (Gen) and counterfeit (Count) observations.", fig.show='hold'}
+load("./SwissBankNotes.RData")
+
+# Variance of each variable
+apply(SwissBankNotes, 2, var)
+
+# Boxplots to visualize the distribution and scale of the variables
+par(mfrow=c(1,6), mar=c(2,3,2,1))
+for(i in 1:6){
+boxplot(SwissBankNotes[1:100,i], SwissBankNotes[101:200,i], 
+        names=c("Gen", "Count"), 
+        col=c("#5ab4ac" , "#d8b365"), main=colnames(SwissBankNotes)[i])
+}
+
+
+```
+
+As shown in Figure 1, the scales of the variables show high variability, especially for `inner.lower` and `inner.upper` variables compared to the rest. This indicates that the principal component analysis would require to shift the variable distributions, and to center to have mean zero. Furthermore, variance values of the variables seems less different yet show a variability, indicating that scaling each individual variable to have standard deviation one would be good practice to obtain better PCA results.
+
+```{r, out.width = '\\maxwidth' , fig.width=7 ,fig.height=3.5 , fig.align='center', fig.cap="Scree plots showing the variance explained by principal components of only genuine observations. Left plot shows principal components generated without centering or scaling the data, whereas right plot shows upon centering and scaling", fig.show='hold'}
+
+# Add factor column defining the type of the bank note 
+# and modify column names for a better biplot visualization
+bnotes <- SwissBankNotes
+bnotes[[7]] <- as.factor(c(rep("genuine", 100), rep("counterfeit", 100)))
+colnames(bnotes) <- c("lenght", "height.L", "height.R", "inner.L", "inner.U", "diagonal","type")
+head(bnotes)
+
+# generating PCs for genuine observations,
+# and compare centered, scaled PCs to non-centered or scaled 
+gen.pca.csF <- prcomp(bnotes[1:100,1:6], center = FALSE, scale = FALSE)
+gen.pca.csT <- prcomp(bnotes[1:100,1:6], center = TRUE, scale = TRUE)
+
+# Summary of genuine PCA without centering or scaling
+summary(gen.pca.csF)
+# Summary of genuine PCA wit centering and scaling
+summary(gen.pca.csT)
+
+par(mfrow=c(1,2))
+screeplot(gen.pca.csF,  type="lines", main="Genuine Only \n center = FALSE, scale = FALSE",
+          cex.main=.8)
+screeplot(gen.pca.csT, type="lines", main="Genuine Only \n center = TRUE, scale = TRUE", 
+           cex.main=.8)
+```
+
+Summary of the PCA results indicates the importance of each principal component, where the most important component is displayed as first. Proportion of variance for each component is displayed as the percentage of the variability captured by each component. Similarly cumulative proportion indicates the what percent of the variability is explained by a certain component and its precedents, which have higher importance. Although there are no set standards, first couple of principal components would be expected to explain most of the variability of the data, with first component having the highest proportion of variance and then decreasing gradually for the successive components. Visualization of the explained proportion by each component is achieved via scree plot in Figure 2. Usually an elbow effect is seen where the proportion of the variance reaches a low plateau after a certain component.
+
+Summary results and scree plots for non-centered and centered genuine bank note data were produced and compared. Summary results of non-centered and centered data indicates that the centering is an important step of the PCA, since the non-centered data show an aberrant distribution of proportion of the variance, where all the variance is explained by the first component. This can also be seen in the scree plots where non-centered data has a very steep elbow. On the other hand, principle components of the centered and scaled data show an expected scree plot profile and distribution of proportion of the variance. First three components of the centered data captures about 80% of the variability, and the component 3 on the scree plot looks like a candidate for an elbow point, as successive components do not add much explained variability. Hence, first three component were selected for further analysis.
+
+Centering and scaling was also preferred for the PCA of counterfeit and whole data sets. Summary of the PCA analysis and scree plots were produced.
+
+```{r, out.width = '\\maxwidth' , fig.width=7 ,fig.height=3.5 , fig.align='center', fig.cap="Scree plots of counterfeit and whole data sets", fig.show='hold'}
+
+count.pca.csT <- prcomp(bnotes[101:200,1:6], center = TRUE, scale = TRUE)
+all.pca.csT <- prcomp(bnotes[,1:6], center = TRUE, scale = TRUE)
+
+# Summary of PCA with counterfeit data
+summary(count.pca.csT)
+
+# Summary of PCA with whole data
+summary(all.pca.csT)
+
+par(mfrow=c(1,2))
+screeplot(all.pca.csT, type="lines", main="Counterfeit Only \n center = TRUE, scale = TRUE", cex.main=.8)
+screeplot(all.pca.csT, type="lines", 
+          main="Counterfeit & Genuine \n center = TRUE, scale = TRUE", cex.main=.8)
+```
+
+Similar to the results obtained from genuine data, summary and scree plots of PCA of both counterfeit and whole data sets, show that around 80% of variability is captured by the first three components, and the cut off according to scree plots would be the third or fourth component. 
+
+```{r, out.width = '\\maxwidth' , fig.width=5 ,fig.height=5 , fig.align='center', fig.cap="Biplots of the genuine data, produced with first three components. Components and percentage of the explained variable by the component is in indicated on the x and y axis.", fig.show='hold'}
+
+## the ggbiplot function used for biplot generation
+## arguments : x (data), choices (components to be plotted), 
+##             grps (sub-groups in the data i.e. genuine, counterfeit),
+##             leg.pos (legend position, or legen turn on/off)
+##             main (plot title)
+
+library(ggbiplot) 
+mybiplot <- function(x, comps, grps, leg.pos, main){
+g<-ggbiplot(x, choices = comps, scale = 1, obs.scale = 1, var.scale = 1, 
+         groups = grps, ellipse = TRUE,
+         circle = F, varname.size = 4,
+         varname.adjust = 1.2, alpha=0.5)
+g <- g + scale_color_discrete(name = '') 
+g <- g + theme(legend.direction = 'horizontal', 
+               legend.position = leg.pos, legend.text = element_text(size = 8),
+               axis.title=element_text(size=10,face="bold"),
+               plot.title = element_text(size = rel(1.5)))
+g <- g + labs(title = main)
+g
+
+}
+
+mybiplot(gen.pca.csT, comps=c(1,2), grps=F, leg.pos = "none", main="Genuine")
+mybiplot(gen.pca.csT, comps=c(1,3), grps=F, leg.pos = "none", main="")
+```
+
+```{r, echo=FALSE, out.width = '\\maxwidth' , fig.width=5 ,fig.height=5 , fig.align='center', fig.cap="Biplots of the counterfeit data, produced with first three components. Components and percentage of the explained variable by the component is in indicated on the x and y axis.", fig.show='hold'}
+
+mybiplot(count.pca.csT, comps=c(1,2), grps=F, leg.pos = "none", main="Counterfeit")
+mybiplot(count.pca.csT, comps=c(1,3), grps=F, leg.pos = "none", main="")
+```
+
+```{r, echo=FALSE,out.width = '\\maxwidth' , fig.width=5 ,fig.height=5, fig.align='center', fig.cap="Biplots of the genuine and counterfeit data, produced with first three components. Components and percentage of the explained variable by the component is in indicated on the x and y axis.", fig.show='hold'}
+
+mybiplot(all.pca.csT, comps=c(1,2), grps=bnotes$type, leg.pos = "bottom", 
+         main= "Genuine and Counterfeit")
+mybiplot(all.pca.csT, comps=c(1,3), grps=bnotes$type, leg.pos = "bottom", 
+         main= "")
+
+```
+
+Biplot is a two-dimensional scatter plot of principal components, where each point represents an observation on the data. Observations with similar variance profiles across variables will cluster closely, whereas different data subgroups with different variance profiles will be separated. As shown on biplots (Figures 4-6) data containing only genuine or only counterfeit bank note observations do not present a well defined separation, whereas the whole data set including both genuine and counterfeit observations show an more obvious separation, indicating that PCA successfully captures different variable profiles for genuine and counterfeit data.
+
+Another element of the biplot represents loading of each variable on a component and is visualized with red arrows, indicating which component explains what proportion of variance of that certain variable. Additionally variables with smaller angles, that are closer to the same principal component and pointing out the same direction are likely to be correlated or have the similar variances. For example on the upper biplot in Figure 5, right height (`height.R`) and left height (`height.L`) are more parallel to the x-axis and located very closely, indicating these variables have a much higher loading for the first component and show a high positive correlation. This would make sense, since the bank notes have a rectangular shape, we would expect both right or left heights to be equal or, have a strong tendency to increase when one increases. Consequently, both of these variables were very closely located across all biplots, and were mostly represented by the first component. Another interesting variable, `diagonal` is mostly explained by the first component and seems to be an important contributor to the separation of the genuine and counterfeit sub-groups for whole data, whereas it shows distinct localisations and explained mostly by the second component for genuine and counterfeit only data, indicating that the diagonality is less variable within the two type of bank notes but show a significant variability between these two groups of bank notes, making it an important variable for the identification of the counterfeit bank notes. 
+
+
+
+# Exercise 2: Generating simulated data, and performing PCA and K means clustering
+
+## (a) Generating simulated data set
+
+Simulated data set consists of three different classes of observations, with each consisting of 20 observations, making it 60 observations in total. Each class and their observed values for 50 variables were generated with `rnorm()` function, with varying mean and standard deviations.
+
+```{r, eval=FALSE, out.width = '\\maxwidth' , fig.width=5 ,fig.height=5, fig.align='center', fig.cap="Biplots of the genuine and counterfeit data, produced with first three components. Components and percentage of the explained variable by the component is in indicated on the x and y axis.", fig.show='hold'}
+
+# (a) Generate a simulated dataset
+
+cl.1 <- matrix(data=rnorm(50*20, mean = 3, sd = 1), nrow=20, ncol=50)   # Class 1
+cl.2 <- matrix(data=rnorm(50*20, mean = 6, sd = 0.5), nrow=20, ncol=50) # Class 2
+cl.3 <- matrix(data=rnorm(50*20, mean = 1, sd = 3), nrow=20, ncol=50)   # Class 3
+
+sim.data <- rbind(cl.1, cl.2, cl.3)
+# add a factor column indicating class
+sim.data <- data.frame(sim.data, as.factor(c(rep("Class1", 20),  
+                                             rep("Class2", 20), 
+                                             rep("Class3", 20))) )
+
+colnames(sim.data) <- c(paste("V", 1:50, sep=""), "Class")
+
+sim.data[c(1:5), c(1:3, 49:51)] # First three rows and first three & last three columns
+
+```
+
+```{r, echo=FALSE}
+
+# save(sim.data, file="simdata.RData")
+load("simdata.RData")
+sim.data[c(1:5), c(1:3, 49:51)]
+```
+
+During the generation of the data, utilization of `set.seed()` function was forgotten, therefore data was saved as `simdata.RData` in order to achieve reproducibility and added to the homework dropbox.
+
+## (b) Perform PCA on the 60 observations and plot the first two principal component score vectors.
+
+```{r, out.width = '\\maxwidth' , fig.width=5 ,fig.height=5, fig.align='center', fig.cap="Biplot of simulated data", fig.show='hold'}
+pca.sim.data <- prcomp(sim.data[,1:50], center = TRUE, scale = TRUE)
+mybiplot(x=pca.sim.data, comps = c(1, 2), grps = sim.data$Class, leg.pos = "top", main = " ")
+```
+
+Different classes of data was nicely separated, representing the variability within each class. Class 1, 2 and 3 have means of 3, 6, 1, and standard deviations of 1, 0.5, 3 respectively. Therefore, as shown in Figure 7 class 3 has the most dispersed observations across all classes. 
+
+## (c) Perform K -means clustering of the observations with K = 3
+
+K-means clustering is a partitioning method that clusters the observations of a data set into desired number of K clusters. Each observation is assigned to only one of the clusters, making the clusters distinct and non-overlapping. This is achieved by minimizing the distance between each observation within a cluster.  (1) Initially algorithm assigns a random cluster for each observation, (2) then computes a cluster center (centroid), a vector of the variable feature means for the observations for each cluster. (3) The distances between each observation and centroid are then calculated and the observations that are closest to the newly assigned cluster center are clustered in the same cluster. Steps 2-3 are repeated unlit reaching convergence, and there is no change of cluster centers. One of the problems of this algorithm is that while looking for a global optimum cluster center, algorithm can get stuck at a local optimum, and although the general k-means method has been empowered with other algorithms, preventing a quick convergence to a local minimum, trying several random starts is recommended. 
+
+```{r, eval=FALSE}
+library("multtest")
+library("fpc")
+library("cluster")
+
+# cluster for 3 groups, 
+# exclude factor column, indicating class
+km3 <- kmeans(sim.data[,1:50], 3)
+
+#tabulate the results
+table(km3$cluster, sim.data$Class)
+```
+
+```{r, echo=FALSE}
+#save(km3, file="km3.RData")
+load("km3.RData")
+
+#tabulate the results 98.33333% was correctly classified
+table(km3$cluster, sim.data$Class)
+```
+
+```{r, eval=FALSE}
+# see the misclassified observation
+tail( cbind(km3$cluster, as.character(sim.data$Class)) )
+```
+
+```{r, echo=FALSE}
+tail( data.frame(cluster=km3$cluster, class=as.character(sim.data$Class)) )
+```
+
+Upon K-means clustering for `K=3`, we can see that all the class 1 observations were clustered in cluster 3, all class 2 in cluster 1, almost all class 3 in cluster 2, with only one class 3 observation being misclassified in cluster 3 with all class 1 observations. This indicates that 98% of the simulated data was clustered as expected for each class. In order to visualize the localization of the clusters, cluster centers and observations, first two columns of the simulated data was plotted in a two-dimensional scatter plot, indicating the clustering of the observations with colors and actual class in numbers. This scatter plot should give us an idea about the clusters, since the variable values of each observation were randomly assigned from the same distribution for each class. As shown in Figure 8 (left), most of the observations that belong to the same class are clustered together accordingly, with a cluster center that visually seems correct. Only one class 3 observation is incorrectly clustered in cluster 3, a cluster that only class 1 observations are assigned. This is quite unexpected when we look at the plot as another class 3 observation localized very closely and clustered appropriately. However, this is just a representation of two variables, whereas the distances are computed by taking all variables into account. Therefore results of the k=3 clustering on the original simulated data set were also visualized with first principal components, generated in the part (a) of the exercise. Principal components 1 and 2 cumulatively explain about 60% (55% PC1 and 5% PC2) of the variance, which provides a much better  a much better visualization (however one then fails to visualize data centers). As shown in Figure 8 (right), the misclassified data point is localized between the two obvious clusters that are relatively well separated across the x-axis, or PC1.  It is likely that this observation is a candidate for an outlier and therefore has less distance to the center of cluster 3 (where all class 1 observations are clustered) then cluster 2 (where all class 3 observations are clustered). Same visualization methods were also applied to next part of the exercise. 
+
+```{r, echo=FALSE, out.width = '\\maxwidth' , fig.width=10 ,fig.height=6, fig.align='center', fig.cap="Scatterplot of simulated data variables V1 vs V2 (on the left) and principal components PC1 vs PC2 (on the right) of the simulated data. Each observation is represented by the actual class number they belong to. Each cluster assigned to the observation is represented with different colors as indicated in lower the legend. Each cluster center is represented with a star (*) and with a different color for each cluster as shown in the upper legend. In this example a class 3 observation is falsely clustered in cluster 3, a cluster that only class 1 observations are assigned. (R code for the figure can be found in appendix.)", fig.show='hold'}
+clusters <- cbind(km3$cluster, as.character(sim.data$Class))
+cl1.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class1")
+cl2.1 <- which(clusters[,1] == 1 & clusters[,2] == "Class2")
+cl3.2 <- which(clusters[,1] == 2 & clusters[,2] == "Class3")
+cl3.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class3")
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+# plot the groups with V1 & 2
+palette(c('#7fc97f','#beaed4','#fdc086'))
+plot(sim.data[c("V1", "V2")], type="n", main="k=3 with V1 and V2")
+text(sim.data[cl2.1, c("V1", "V2")], label=2, col='#beaed4', cex=2)
+text(sim.data[cl3.2, c("V1", "V2")], label=3, col='#7fc97f', cex=2)
+text(sim.data[cl3.3, c("V1", "V2")], label=3, col='#fdc086', cex=2)
+text(sim.data[cl1.3, c("V1", "V2")], label=1, col='#fdc086', cex=2)
+points(km3$centers[ , c("V1", "V2")], col = c('#7570b3','#1b9e77', '#d95f02'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:3), col=c('#beaed4','#7fc97f','#fdc086'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:3), col=c('#7570b3','#1b9e77', '#d95f02'), pch="*", pt.cex=3, cex=1.2)
+# see which one was mis-clustered
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+text(sim.data[59, "V1"]+0.5, sim.data[59, "V2"]+1.9, col='#e7298a', 
+     labels="Misclassified \n Data Point", adj=c(0.6, 0.6), cex=1)
+
+# plotting the PCA component 1 & 2
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl2.1, 1:2], label=2, col='#beaed4', cex=2)
+text(pca.sim.data$x[cl3.2, 1:2], label=3, col='#7fc97f', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[cl1.3, 1:2], label=1, col='#fdc086', cex=2)
+legend("bottomright", legend = paste("Cluster", 1:3), col=c('#beaed4','#7fc97f','#fdc086'), pch=20, pt.cex=2, cex=1.2)
+# see which one was mis-clustered
+points(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], col = '#e7298a', pch = "O", cex = 3) #label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2]+1.1, col='#e7298a', 
+     labels="Misclassified \n Data Point", adj=c(0.6, 0.6), cex=1)
+
+```
+
+
+\newpage
+
+## (d) Perform K-means clustering with K = 2 and K = 4.
+
+Same pipeline applied to k=3 clustering of the was also applied to k=2 and k=4
+
+```{r, eval=FALSE}
+## (d) k =2 and k=4
+
+# k = 2
+km2 <- kmeans(sim.data[, -51], 2) 
+table(km2$cluster, sim.data$Class)
+```
+
+```{r, echo=F}
+# save(km2, file="km2.RData")
+load("km2.RData")
+table(km2$cluster, sim.data$Class)
+```
+
+When K was set to 2, all class 1 and 3 observations were clustered in cluster 1 and all class 2 observations in cluster 2, indicating that class 1 and class 3 are closer compared to class 2. This is probably due to the set mean and variance of the classes. Since class 2 has the largest mean and the smallest standard variation, it separates very well from other classes, which have means of 3 and 1, and standard deviations of 1 and 3 for class 1 and 3 respectively. As shown in Figure 9, class 1 and 3 observations are localized much closer to each other and class 2 is well separated, resulting in clustering classes 1 and 3 together as expected when only clustered with 2 clusters.
+
+```{r, echo=FALSE, out.width = '\\maxwidth' , fig.width=11 ,fig.height=5, fig.align='center', fig.cap="Scatterplot of simulated data variables V1 vs V2 (on the left) and principal components PC1 vs PC2 (on the right) of the simulated data. Each observation is represented by the actual class number they belong to. Each cluster assigned to the observation is represented with different colors as indicated in lower the legend. Each cluster center is represented with a star (*) and with a different color for each cluster as shown in the upper legend. (R code for the figure can be found in appendix.)", fig.show='hold', fig.pos="h"}
+clusters <- cbind(km2$cluster, as.character(sim.data$Class))
+cl1 <- which(clusters[,1] == 1 & clusters[,2] == "Class1")
+cl3 <- which(clusters[,1] == 1 & clusters[,2] == "Class3")
+cl2 <- which(clusters[,1] == 2 & clusters[,2] == "Class2")
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+#plot k=2 with V1 & V2
+plot(sim.data[c("V1", "V2")], type='n', main="k=2 with V1 and V2")
+text(sim.data[cl1, c("V1", "V2")], label=1, col='#7fc97f', cex=2)
+text(sim.data[cl3, c("V1", "V2")], label=3, col='#7fc97f', cex=2)
+text(sim.data[cl2, c("V1", "V2")], label=2, col='#beaed4', cex=2)
+points(km2$centers[ , c("V1", "V2")], col = c('#1b9e77','#7570b3'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:2), col=c('#7fc97f','#beaed4'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:2), col=c('#1b9e77','#7570b3'), pch="*", pt.cex=3, cex=1.2)
+
+# plotting the PCA component 1 & 2 
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl2, 1:2], label=2, col='#beaed4', cex=2)
+text(pca.sim.data$x[cl3, 1:2], label=3, col='#7fc97f', cex=2)
+text(pca.sim.data$x[cl1, 1:2], label=1, col='#7fc97f', cex=2)
+legend("bottomright", legend = paste("Cluster", 1:2), col=c('#beaed4','#7fc97f'), pch=20, pt.cex=2, cex=1.2)
+```
+
+```{r, eval=FALSE}
+# k = 4
+km4 <- kmeans(sim.data[, -51], 4) 
+table(km4$cluster, sim.data$Class)
+```
+
+```{r, echo=FALSE}
+# save(km2, file="km4.RData")
+load("km4.RData")
+table(km4$cluster, sim.data$Class)
+```
+
+When K is set to 4, all class 1 and class 2 observations are clustered under clusters 4 and 1 respectively. However observations of class 3, the class with the highest variance, are mostly clustered under cluster 2 and only a few are clustered under cluster 3 without sharing their clusters with other class observations. On the other hand, the same observation, namely observation 59, that was misclassified in part (c) was again clustered with class 1 observations under cluster 4. This again suggests that this observation is an outlier of class 3 and is much similar to class 1 observations. On the other hand the 3 class 3 observations that are assigned to cluster 2, seems like an artifact of setting an unnatural K (Figure 10).   
+ 
+
+```{r, echo=F, , out.width = '\\maxwidth' , fig.width=11 ,fig.height=5, fig.align='center', fig.cap="Scatterplot of simulated data variables V1 vs V2 (on the left) and principal components PC1 vs PC2 (on the right) of the simulated data. Each observation is represented by the actual class number they belong to. Each cluster assigned to the observation is represented with different colors as indicated in lower the legend. Each cluster center is represented with a star (*) and with a different color for each cluster as shown in the upper legend. (R code for the figure can be found in appendix.)", fig.show='hold', fig.pos="h"}
+
+clusters <- cbind(km4$cluster, as.character(sim.data$Class))
+cl1.4 <- which(clusters[,1] == 4 & clusters[,2] == "Class1")
+cl2.1 <- which(clusters[,1] == 1 & clusters[,2] == "Class2")
+cl3.2 <- which(clusters[,1] == 2 & clusters[,2] == "Class3")
+cl3.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class3")
+cl3.4 <- which(clusters[,1] == 4 & clusters[,2] == "Class3")
+
+# ['#1b9e77', '#7570b3','#d95f02','#386cb0']
+# ['#7fc97f','#beaed4','#fdc086','#80b1d3']
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+plot(sim.data[c("V1", "V2")], type='n', main="k=4 with V1 and V2")
+text(sim.data[cl1.4, c("V1", "V2")], label=1, col='#80b1d3', cex=2) #cl4
+text(sim.data[cl2.1, c("V1", "V2")], label=2, col='#beaed4', cex=2) #cl1
+text(sim.data[cl3.2, c("V1", "V2")], label=3, col='#7fc97f', cex=2) #cl2
+text(sim.data[cl3.3, c("V1", "V2")], label=3, col='#fdc086', cex=2) #cl3
+text(sim.data[cl3.4, c("V1", "V2")], label=3, col='#80b1d3', cex=2) #cl4
+
+points(km4$centers[ , c("V1", "V2")], col = c('#7570b3','#1b9e77', '#d95f02','#386cb0'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:4), col=c('#beaed4','#7fc97f','#fdc086','#80b1d3'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:4), col=c('#7570b3','#1b9e77', '#d95f02','#386cb0'), pch="*", pt.cex=3, cex=1.2)
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+text(sim.data[59, "V1"]+0.5, sim.data[59, "V2"]+1.3, col='#e7298a', 
+     labels="Observation 59", adj=c(0.6, 0.6), cex=1)
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+
+
+# plotting the PCA component 1 & 2 
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl1.4, 1:2], label=1, col='#80b1d3', cex=2) #cl4
+text(pca.sim.data$x[cl2.1, 1:2], label=2, col='#beaed4', cex=2) #cl1
+text(pca.sim.data$x[cl3.2, 1:2], label=3, col='#7fc97f', cex=2) #cl2
+text(pca.sim.data$x[cl3.3, 1:2], label=3, col='#fdc086', cex=2) #cl3
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], label=3, col='#80b1d3', cex=2) #cl4
+legend("bottomright", legend = paste("Cluster", 1:4), col=c('#beaed4','#7fc97f','#fdc086','#80b1d3'), pch=20, pt.cex=2, cex=1.2)
+
+points(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], col = '#e7298a', pch = "O", cex = 3) #label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2]+1.1, col='#e7298a', 
+     labels="Observation 59", adj=c(0.6, 0.6), cex=1)
+```
+
+## (e) Perform K-means clustering with K = 3 on the first two principal component score vectors
+
+```{r, eval=FALSE}
+## (e) Kmeans with comp1 & 2
+# names(pca.sim.data) 
+pca.km3 <- kmeans(pca.sim.data$x[, 1:2], 3)
+table(pca.km3$cluster, sim.data$Class)
+```
+```{r, echo=F}
+#save(pca.km3, file="pcakm3.RData")
+load("pcakm3.RData")
+table(pca.km3$cluster, sim.data$Class)
+```
+
+```{r, eval=F}
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 on PC1 and PC2")
+text(pca.sim.data$x[cl2.1, 1:2], label=2, col='#beaed4', cex=2)
+text(pca.sim.data$x[cl3.2, 1:2], label=3, col='#7fc97f', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[cl1.3, 1:2], label=1, col='#fdc086', cex=2)
+legend("bottomright", legend = paste("Cluster", 1:3), col=c('#beaed4','#7fc97f','#fdc086'), pch=20, pt.cex=2, cex=1.2)
+# see which one was mis-clustered
+points(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], col = '#e7298a', pch = "O", cex = 3) #label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2]+1.1, col='#e7298a', 
+     labels="Misclassified \n Data Point", adj=c(0.6, 0.6), cex=1)
+```
+
+Same exact clustering pattern that was observed raw data was observed using the first two principal component scores for each observation. This time although only two variables were included in the analysis, because of the special property of principal components, where the first components explain most of the variance in the data, we still get the same results. This indicates that principal components can be used for many other statistical methods other than biplotting, and are very useful for reducing the dimensionality of the data, slightly lifting the "curse of dimensionality".
+
+## (f) Using the `scale()` function, perform K -means clustering with K = 3 on the data after scaling each variable to have standard deviation one.
+
+```{r, eval=F}
+## (f) scale and cluster
+scl.data <- scale(sim.data[,-51])
+scl.km3 <- kmeans(scl.data, 3)
+```
+
+```{r, echo=F}
+table(scl.km3$cluster, sim.data$Class)
+```
+
+Also with scaling, same pattern was observed, and observation 59 was again incorrectly clustered, suggesting that reducing the variation within the this simulated data set does not improve clustering results. This also supports the fact that observation 59 cannot be normalized even upon scaling and keeps its distance from its actual class, class 3. 
+
+
+# Exercise 3: Applying hierarchial clustering to `Ch10Ex11.csv` gene epression data set
+
+## (a) Loading the data
+
+```{r}
+library("fpc")
+library("cluster")
+
+genedata <- read.csv("Ch10Ex11.csv", header=F)
+colnames(genedata) <- c(paste("H", 1:20, sep=""), paste("D", 1:20, sep=""))
+rownames(genedata) <- paste("Gene", 1:1000, sep="")
+ 
+genedata[1:5, c(1:3, 38:40)]
+```
+
+## (b) Apply hierarchical clustering to the samples using correlation-based distance, and plot the dendrogram.
+
+Correlation based distance `as.dist((1 - cor(genedata))/2)` was applied to the gene expression values obtained from healthy and diseased individuals. Correlation-based distance clusters two observations together if their features are highly correlated, even though the observed values may be far apart in terms of Euclidean distance. This means that even the gene expressions are very different between clustered samples, the gene expression profile has a very similar behavior, where for example certain genes are distinctly up or down regulated for a certain disease state. Upon calculating the distance, hierarchical clustering was computed using `hclust()` function, using different linkage algorithms. Results were presented as dendrograms for every different linkage algorithm, which resulted in different clustering of the samples, suggesting that results depend on the type of linkage used. As shown in Figure 11 most of the algorithms successfully separated the healthy and diseased samples, with average linkage method providing a less accurate clustering. Linkage method determines how the dissimilarities between clusters or single observations are determined according to a given distance matrix. Therefore it is expected to have an effect on the actual clustering.
+
+```{r, echo=F, , out.width = '\\maxwidth' , fig.width=12 ,fig.height=6, fig.align='center', fig.cap="Hierarchial clustering of the gene expression data set for different linkage methods. Healthy and diseased samples were represented with blue and red colors respectively. Following correlation based distance `as.dist((1 - cor(genedata))/2)` was preferred for the generation of the dendrogram, as suggested in `?dist` help file  (R code for the figure can be found in appendix.)", fig.show='hold', fig.pos="h", message=F, error=F}
+
+library(dendextend)
+
+groupCodes <- c(rep("H",20), rep("D",20))
+colorCodes <- c(H="#2c7bb6", D='#d7191c')
+linkage <- c( "single", "complete", "average", "centroid")
+par(mfrow=c(2,2), mar=c(3,2,3,2))
+for(i in 1:length(linkage)){
+  d <- as.dist((1 - cor(genedata))/2) #correlation based distance as suggested in ?dist help file
+  hc <- hclust(d, method=linkage[i])            # apply hirarchical clustering with different linkages
+  hcd<-as.dendrogram(hc, dLeaf=0.1, h=0.3)
+  
+  
+  # Assigning the labels of dendrogram object with new colors:
+  labels_colors(hcd) <- colorCodes[groupCodes][order.dendrogram(hcd)]
+  # Plotting the new dendrogram
+  plot(hcd, main=paste(linkage[i], "linkage", sep=" "), ylim=c(0.1 , 0.6))
+  
+}
+
+```
+
+
+## (c) Determine which genes differ the most across the two groups
+
+The genes with expression values that differ the most across groups can be determined by calculating the distance between diseased and healthy samples for a certain gene. However, to determine the significance of this distance, a multiple testing procedure should be applied, and the significantly different genes between healthy and diseased samples should be determined. Upon setting a false discovery threshold, and filtering insignificant genes, calculated distances can be sorted in descending order and top 100 genes with the largest distance can be determined as the most different genes between two groups.    
+
+```{r, message=F }
+library("multtest")
+
+class <- as.factor(c(rep("H", 20), rep("D", 20))) 
+mt.test <- mt.maxT(genedata, classlabel=class)
+names(mt.test)
+
+## $index :	Vector of row indices, between 1 and nrow(X), 
+##          where rows are sorted first according to their adjusted p-values, 
+##          next their unadjusted p-values, and finally their test statistics.
+## $rawp :	Vector of raw (unadjusted) p-values, ordered according to index.
+## $adjp :  Vector of adjusted p-values, ordered according to index.
+
+# Determine Euclidean dist. for each gene between sample classes
+euc.dist <- function(x) sqrt( sum( (x[1:20] - x[21:40]) ^ 2 ) ) 
+distance <- as.numeric(apply(genedata, 1, euc.dist))
+summary(distance)
+
+# Data frame shows the genes with an ascending order of adjusted p-values
+diff.gene <- data.frame(distance=distance[mt.test$index], p.val=mt.test$rawp, adj.pval=mt.test$adjp)
+head(diff.gene)
+
+# Filter genes that have an adjusted p-value higher than 0.05 
+# i.e. differentially expressed genes
+DEgenes <- diff.gene[which(diff.gene$adj.pval <= 0.05), ]
+head(DEgenes)
+
+# number of differentially expressed genes
+nrow(DEgenes)
+
+# Show differentially expressed genes with the highest distance
+DEgenes <- DEgenes[order(DEgenes$distance, decreasing=T), ]
+
+#most different 20 genes
+DEgenes[1:20,]
+
+```
+
+\newpage
+
+# Appendix
+
+R codes of the plots that were not presented in the text.
+
+## Figure 8
+```{r, eval=FALSE}
+clusters <- cbind(km3$cluster, as.character(sim.data$Class))
+cl1.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class1")
+cl2.1 <- which(clusters[,1] == 1 & clusters[,2] == "Class2")
+cl3.2 <- which(clusters[,1] == 2 & clusters[,2] == "Class3")
+cl3.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class3")
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+# plot the groups with V1 & 2
+palette(c('#7fc97f','#beaed4','#fdc086'))
+plot(sim.data[c("V1", "V2")], type="n", main="k=3 with V1 and V2")
+text(sim.data[cl2.1, c("V1", "V2")], label=2, col='#beaed4', cex=2)
+text(sim.data[cl3.2, c("V1", "V2")], label=3, col='#7fc97f', cex=2)
+text(sim.data[cl3.3, c("V1", "V2")], label=3, col='#fdc086', cex=2)
+text(sim.data[cl1.3, c("V1", "V2")], label=1, col='#fdc086', cex=2)
+points(km3$centers[ , c("V1", "V2")], col = c('#7570b3','#1b9e77', '#d95f02'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:3), col=c('#beaed4','#7fc97f','#fdc086'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:3), col=c('#7570b3','#1b9e77', '#d95f02'), pch="*", pt.cex=3, cex=1.2)
+# see which one was mis-clustered
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+text(sim.data[59, "V1"]+0.5, sim.data[59, "V2"]+1.9, col='#e7298a', 
+     labels="Misclassified \n Data Point", adj=c(0.6, 0.6), cex=1)
+
+# plotting the PCA component 1 & 2
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl2.1, 1:2], label=2, col='#beaed4', cex=2)
+text(pca.sim.data$x[cl3.2, 1:2], label=3, col='#7fc97f', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[cl1.3, 1:2], label=1, col='#fdc086', cex=2)
+legend("bottomright", legend = paste("Cluster", 1:3), col=c('#beaed4','#7fc97f','#fdc086'), pch=20, pt.cex=2, cex=1.2)
+# see which one was mis-clustered
+points(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], col = '#e7298a', pch = "O", cex = 3) #label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2]+1.1, col='#e7298a', 
+     labels="Misclassified \n Data Point", adj=c(0.6, 0.6), cex=1)
+
+```
+
+
+## Figure 9
+```{r, eval=FALSE}
+clusters <- cbind(km2$cluster, as.character(sim.data$Class))
+cl1 <- which(clusters[,1] == 1 & clusters[,2] == "Class1")
+cl3 <- which(clusters[,1] == 1 & clusters[,2] == "Class3")
+cl2 <- which(clusters[,1] == 2 & clusters[,2] == "Class2")
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+#plot k=2 with V1 & V2
+plot(sim.data[c("V1", "V2")], type='n', main="k=2 with V1 and V2")
+text(sim.data[cl1, c("V1", "V2")], label=1, col='#7fc97f', cex=2)
+text(sim.data[cl3, c("V1", "V2")], label=3, col='#7fc97f', cex=2)
+text(sim.data[cl2, c("V1", "V2")], label=2, col='#beaed4', cex=2)
+points(km2$centers[ , c("V1", "V2")], col = c('#1b9e77','#7570b3'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:2), col=c('#7fc97f','#beaed4'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:2), col=c('#1b9e77','#7570b3'), pch="*", pt.cex=3, cex=1.2)
+
+# plotting the PCA component 1 & 2 
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl2, 1:2], label=2, col='#beaed4', cex=2)
+text(pca.sim.data$x[cl3, 1:2], label=3, col='#7fc97f', cex=2)
+text(pca.sim.data$x[cl1, 1:2], label=1, col='#7fc97f', cex=2)
+legend("bottomright", legend = paste("Cluster", 1:2), col=c('#beaed4','#7fc97f'), pch=20, pt.cex=2, cex=1.2)```
+```
+
+## Figure 10
+```{r, eval=F}
+clusters <- cbind(km4$cluster, as.character(sim.data$Class))
+cl1.4 <- which(clusters[,1] == 4 & clusters[,2] == "Class1")
+cl2.1 <- which(clusters[,1] == 1 & clusters[,2] == "Class2")
+cl3.2 <- which(clusters[,1] == 2 & clusters[,2] == "Class3")
+cl3.3 <- which(clusters[,1] == 3 & clusters[,2] == "Class3")
+cl3.4 <- which(clusters[,1] == 4 & clusters[,2] == "Class3")
+
+# ['#1b9e77', '#7570b3','#d95f02','#386cb0']
+# ['#7fc97f','#beaed4','#fdc086','#80b1d3']
+
+par(mfrow=c(1,2), mar=c(4,4,4,1))
+
+plot(sim.data[c("V1", "V2")], type='n', main="k=4 with V1 and V2")
+text(sim.data[cl1.4, c("V1", "V2")], label=1, col='#80b1d3', cex=2) #cl4
+text(sim.data[cl2.1, c("V1", "V2")], label=2, col='#beaed4', cex=2) #cl1
+text(sim.data[cl3.2, c("V1", "V2")], label=3, col='#7fc97f', cex=2) #cl2
+text(sim.data[cl3.3, c("V1", "V2")], label=3, col='#fdc086', cex=2) #cl3
+text(sim.data[cl3.4, c("V1", "V2")], label=3, col='#80b1d3', cex=2) #cl4
+
+points(km4$centers[ , c("V1", "V2")], col = c('#7570b3','#1b9e77', '#d95f02','#386cb0'), pch = "*", cex = 5) #center points of the cluster
+legend("bottomright", legend = paste("Cluster", 1:4), col=c('#beaed4','#7fc97f','#fdc086','#80b1d3'), pch=20, pt.cex=2, cex=1.2)
+legend("topright", legend = paste("Center", 1:4), col=c('#7570b3','#1b9e77', '#d95f02','#386cb0'), pch="*", pt.cex=3, cex=1.2)
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+text(sim.data[59, "V1"]+0.5, sim.data[59, "V2"]+1.3, col='#e7298a', 
+     labels="Observation 59", adj=c(0.6, 0.6), cex=1)
+points(sim.data[59, c("V1", "V2")]+0.1, col = '#e7298a', pch = "O", cex = 3)
+
+
+# plotting the PCA component 1 & 2 
+plot(pca.sim.data$x[,1:2], type="n", main="k=3 with PC1 and PC2")
+text(pca.sim.data$x[cl1.4, 1:2], label=1, col='#80b1d3', cex=2) #cl4
+text(pca.sim.data$x[cl2.1, 1:2], label=2, col='#beaed4', cex=2) #cl1
+text(pca.sim.data$x[cl3.2, 1:2], label=3, col='#7fc97f', cex=2) #cl2
+text(pca.sim.data$x[cl3.3, 1:2], label=3, col='#fdc086', cex=2) #cl3
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], label=3, col='#80b1d3', cex=2) #cl4
+legend("bottomright", legend = paste("Cluster", 1:4), col=c('#beaed4','#7fc97f','#fdc086','#80b1d3'), pch=20, pt.cex=2, cex=1.2)
+
+points(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2], col = '#e7298a', pch = "O", cex = 3) #label=3, col='#fdc086', cex=2)
+text(pca.sim.data$x[59, 1], pca.sim.data$x[59, 2]+1.1, col='#e7298a', 
+     labels="Observation 59", adj=c(0.6, 0.6), cex=1)
+```
+
+## Figure 11
+
+```{r, eval=F}
+
+library(dendextend)
+
+groupCodes <- c(rep("H",20), rep("D",20))
+colorCodes <- c(H="#2c7bb6", D='#d7191c')
+linkage <- c( "single", "complete", "average", "centroid")
+par(mfrow=c(2,2), mar=c(3,2,3,2))
+for(i in 1:length(linkage)){
+  d <- as.dist((1 - cor(genedata))/2) #correlation based distance as suggested in ?dist help file
+  hc <- hclust(d, method=linkage[i])            # apply hirarchical clustering with different linkages
+  hcd<-as.dendrogram(hc, dLeaf=0.1, h=0.3)
+  
+  
+  # Assigning the labels of dendrogram object with new colors:
+  labels_colors(hcd) <- colorCodes[groupCodes][order.dendrogram(hcd)]
+  # Plotting the new dendrogram
+  plot(hcd, main=paste(linkage[i], "linkage", sep=" "), ylim=c(0.1 , 0.6))
+  
+}
+```
