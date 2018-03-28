@@ -1,9 +1,7 @@
 ###############################
 ### Homework 4 - Question 1 ###
-######### Abbas Rizvi #########
 ###############################
 rm(list=ls())
-#setwd("/Users/aarizvi/Google Drive/STA546/hw4/")
 library(gRain)
 library(gRbase)
 library(ggm)
